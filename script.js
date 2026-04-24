@@ -150,8 +150,24 @@ function handleCellClick(row, col) {
     cell.element.classList.add('selected');
 }
 
+// 检查单元格是否为空（包括边界外的位置）
+function isEmpty(row, col) {
+    // 边界外的位置认为是空的
+    if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) {
+        return true;
+    }
+    // 检查单元格是否有水果且未被消除
+    const cell = gameBoard[row][col];
+    return !cell.fruit || cell.element.style.display === 'none';
+}
+
 // 检查两个单元格是否可以连接
 function canConnect(row1, col1, row2, col2) {
+    // 首先检查是否是同一个单元格
+    if (row1 === row2 && col1 === col2) {
+        return false;
+    }
+    
     // 直线连接
     if (canConnectDirect(row1, col1, row2, col2)) {
         return true;
@@ -177,8 +193,14 @@ function canConnectDirect(row1, col1, row2, col2) {
         const minCol = Math.min(col1, col2);
         const maxCol = Math.max(col1, col2);
         
+        // 如果是相邻的单元格，直接返回true
+        if (maxCol - minCol === 1) {
+            return true;
+        }
+        
+        // 检查中间的单元格是否都为空
         for (let col = minCol + 1; col < maxCol; col++) {
-            if (gameBoard[row1][col].fruit && gameBoard[row1][col].element.style.display !== 'none') {
+            if (!isEmpty(row1, col)) {
                 return false;
             }
         }
@@ -190,8 +212,14 @@ function canConnectDirect(row1, col1, row2, col2) {
         const minRow = Math.min(row1, row2);
         const maxRow = Math.max(row1, row2);
         
+        // 如果是相邻的单元格，直接返回true
+        if (maxRow - minRow === 1) {
+            return true;
+        }
+        
+        // 检查中间的单元格是否都为空
         for (let row = minRow + 1; row < maxRow; row++) {
-            if (gameBoard[row][col1].fruit && gameBoard[row][col1].element.style.display !== 'none') {
+            if (!isEmpty(row, col1)) {
                 return false;
             }
         }
@@ -204,14 +232,16 @@ function canConnectDirect(row1, col1, row2, col2) {
 // 一个拐角连接检查
 function canConnectOneCorner(row1, col1, row2, col2) {
     // 检查拐角点1：(row1, col2)
-    if ((!gameBoard[row1][col2].fruit || gameBoard[row1][col2].element.style.display === 'none')) {
+    if (isEmpty(row1, col2)) {
+        // 检查 (row1, col1) -> (row1, col2) -> (row2, col2)
         if (canConnectDirect(row1, col1, row1, col2) && canConnectDirect(row1, col2, row2, col2)) {
             return true;
         }
     }
     
     // 检查拐角点2：(row2, col1)
-    if ((!gameBoard[row2][col1].fruit || gameBoard[row2][col1].element.style.display === 'none')) {
+    if (isEmpty(row2, col1)) {
+        // 检查 (row1, col1) -> (row2, col1) -> (row2, col2)
         if (canConnectDirect(row1, col1, row2, col1) && canConnectDirect(row2, col1, row2, col2)) {
             return true;
         }
@@ -222,23 +252,41 @@ function canConnectOneCorner(row1, col1, row2, col2) {
 
 // 两个拐角连接检查
 function canConnectTwoCorners(row1, col1, row2, col2) {
-    // 水平方向扫描
+    // 水平方向扫描（扫描每一列，检查是否可以通过该列的水平线连接）
     for (let col = -1; col <= BOARD_SIZE; col++) {
-        // 检查是否可以通过(col)的水平线连接
-        const cell1Empty = col < 0 || col >= BOARD_SIZE || 
-                          (!gameBoard[row1][col].fruit || gameBoard[row1][col].element.style.display === 'none');
-        const cell2Empty = col < 0 || col >= BOARD_SIZE || 
-                          (!gameBoard[row2][col].fruit || gameBoard[row2][col].element.style.display === 'none');
+        // 检查两个拐点位置是否为空
+        const corner1Empty = isEmpty(row1, col);
+        const corner2Empty = isEmpty(row2, col);
         
-        if (cell1Empty && cell2Empty) {
-            // 检查第一个点到(row1, col)
-            const canConnect1 = col < 0 || col >= BOARD_SIZE || 
-                              canConnectDirect(row1, col1, row1, col);
-            // 检查(row1, col)到(row2, col)
-            const canConnect2 = canConnectDirect(row1, col, row2, col);
-            // 检查(row2, col)到第二个点
-            const canConnect3 = col < 0 || col >= BOARD_SIZE || 
-                              canConnectDirect(row2, col, row2, col2);
+        if (corner1Empty && corner2Empty) {
+            // 检查路径：(row1, col1) -> (row1, col) -> (row2, col) -> (row2, col2)
+            
+            // 第一段：(row1, col1) 到 (row1, col)
+            let canConnect1 = false;
+            if (col < 0 || col >= BOARD_SIZE) {
+                // 如果col在边界外，检查从(row1, col1)到边界是否畅通
+                canConnect1 = canConnectToBorder(row1, col1, 'horizontal');
+            } else {
+                canConnect1 = canConnectDirect(row1, col1, row1, col);
+            }
+            
+            // 第二段：(row1, col) 到 (row2, col)
+            let canConnect2 = false;
+            if (col < 0 || col >= BOARD_SIZE) {
+                // 如果col在边界外，这条垂直线是畅通的（在网格外）
+                canConnect2 = true;
+            } else {
+                canConnect2 = canConnectDirect(row1, col, row2, col);
+            }
+            
+            // 第三段：(row2, col) 到 (row2, col2)
+            let canConnect3 = false;
+            if (col < 0 || col >= BOARD_SIZE) {
+                // 如果col在边界外，检查从边界到(row2, col2)是否畅通
+                canConnect3 = canConnectToBorder(row2, col2, 'horizontal');
+            } else {
+                canConnect3 = canConnectDirect(row2, col, row2, col2);
+            }
             
             if (canConnect1 && canConnect2 && canConnect3) {
                 return true;
@@ -246,23 +294,41 @@ function canConnectTwoCorners(row1, col1, row2, col2) {
         }
     }
     
-    // 垂直方向扫描
+    // 垂直方向扫描（扫描每一行，检查是否可以通过该行的垂直线连接）
     for (let row = -1; row <= BOARD_SIZE; row++) {
-        // 检查是否可以通过(row)的垂直线连接
-        const cell1Empty = row < 0 || row >= BOARD_SIZE || 
-                          (!gameBoard[row][col1].fruit || gameBoard[row][col1].element.style.display === 'none');
-        const cell2Empty = row < 0 || row >= BOARD_SIZE || 
-                          (!gameBoard[row][col2].fruit || gameBoard[row][col2].element.style.display === 'none');
+        // 检查两个拐点位置是否为空
+        const corner1Empty = isEmpty(row, col1);
+        const corner2Empty = isEmpty(row, col2);
         
-        if (cell1Empty && cell2Empty) {
-            // 检查第一个点到(row, col1)
-            const canConnect1 = row < 0 || row >= BOARD_SIZE || 
-                              canConnectDirect(row1, col1, row, col1);
-            // 检查(row, col1)到(row, col2)
-            const canConnect2 = canConnectDirect(row, col1, row, col2);
-            // 检查(row, col2)到第二个点
-            const canConnect3 = row < 0 || row >= BOARD_SIZE || 
-                              canConnectDirect(row, col2, row2, col2);
+        if (corner1Empty && corner2Empty) {
+            // 检查路径：(row1, col1) -> (row, col1) -> (row, col2) -> (row2, col2)
+            
+            // 第一段：(row1, col1) 到 (row, col1)
+            let canConnect1 = false;
+            if (row < 0 || row >= BOARD_SIZE) {
+                // 如果row在边界外，检查从(row1, col1)到边界是否畅通
+                canConnect1 = canConnectToBorder(row1, col1, 'vertical');
+            } else {
+                canConnect1 = canConnectDirect(row1, col1, row, col1);
+            }
+            
+            // 第二段：(row, col1) 到 (row, col2)
+            let canConnect2 = false;
+            if (row < 0 || row >= BOARD_SIZE) {
+                // 如果row在边界外，这条水平线是畅通的（在网格外）
+                canConnect2 = true;
+            } else {
+                canConnect2 = canConnectDirect(row, col1, row, col2);
+            }
+            
+            // 第三段：(row, col2) 到 (row2, col2)
+            let canConnect3 = false;
+            if (row < 0 || row >= BOARD_SIZE) {
+                // 如果row在边界外，检查从边界到(row2, col2)是否畅通
+                canConnect3 = canConnectToBorder(row2, col2, 'vertical');
+            } else {
+                canConnect3 = canConnectDirect(row, col2, row2, col2);
+            }
             
             if (canConnect1 && canConnect2 && canConnect3) {
                 return true;
@@ -271,6 +337,51 @@ function canConnectTwoCorners(row1, col1, row2, col2) {
     }
     
     return false;
+}
+
+// 检查单元格到边界是否畅通
+function canConnectToBorder(row, col, direction) {
+    if (direction === 'horizontal') {
+        // 检查到左边界
+        let leftClear = true;
+        for (let c = col - 1; c >= 0; c--) {
+            if (!isEmpty(row, c)) {
+                leftClear = false;
+                break;
+            }
+        }
+        if (leftClear) return true;
+        
+        // 检查到右边界
+        let rightClear = true;
+        for (let c = col + 1; c < BOARD_SIZE; c++) {
+            if (!isEmpty(row, c)) {
+                rightClear = false;
+                break;
+            }
+        }
+        return rightClear;
+    } else {
+        // 检查到上边界
+        let topClear = true;
+        for (let r = row - 1; r >= 0; r--) {
+            if (!isEmpty(r, col)) {
+                topClear = false;
+                break;
+            }
+        }
+        if (topClear) return true;
+        
+        // 检查到下边界
+        let bottomClear = true;
+        for (let r = row + 1; r < BOARD_SIZE; r++) {
+            if (!isEmpty(r, col)) {
+                bottomClear = false;
+                break;
+            }
+        }
+        return bottomClear;
+    }
 }
 
 // 消除两个单元格

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>水果连连看</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-header">
+            <h1>水果连连看</h1>
+            <div class="game-info">
+                <div class="info-item">
+                    <span class="label">关卡:</span>
+                    <span id="level" class="value">1</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">时间:</span>
+                    <span id="timer" class="value">60</span>
+                    <span class="unit">秒</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">剩余:</span>
+                    <span id="remaining" class="value">64</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="game-board" id="gameBoard">
+            <!-- 游戏网格将由JavaScript生成 -->
+        </div>
+        
+        <div class="game-controls">
+            <button id="startBtn" class="btn">开始游戏</button>
+            <button id="restartBtn" class="btn">重新开始</button>
+            <button id="hintBtn" class="btn">提示</button>
+        </div>
+        
+        <div id="gameMessage" class="game-message hidden">
+            <p id="messageText"></p>
+            <button id="messageBtn" class="btn"></button>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>

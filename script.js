@@ -150,15 +150,28 @@ function handleCellClick(row, col) {
     cell.element.classList.add('selected');
 }
 
-// 检查单元格是否为空（包括边界外的位置）
+// 检查单元格是否为空（已消除的单元格）
 function isEmpty(row, col) {
-    // 边界外的位置认为是空的
+    // 边界检查
     if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) {
-        return true;
+        return false;
     }
     // 检查单元格是否有水果且未被消除
     const cell = gameBoard[row][col];
     return !cell.fruit || cell.element.style.display === 'none';
+}
+
+// 检查两个单元格是否相邻
+function isAdjacent(row1, col1, row2, col2) {
+    // 左右相邻
+    if (row1 === row2 && Math.abs(col1 - col2) === 1) {
+        return true;
+    }
+    // 上下相邻
+    if (col1 === col2 && Math.abs(row1 - row2) === 1) {
+        return true;
+    }
+    return false;
 }
 
 // 检查两个单元格是否可以连接
@@ -168,8 +181,14 @@ function canConnect(row1, col1, row2, col2) {
         return false;
     }
     
-    // 直线连接
-    if (canConnectDirect(row1, col1, row2, col2)) {
+    // 【关键】首先检查是否相邻，如果相邻直接返回true
+    // 这确保了上下挨着、左右挨着的相同水果一定能消除
+    if (isAdjacent(row1, col1, row2, col2)) {
+        return true;
+    }
+    
+    // 直线连接（中间没有障碍物）
+    if (canConnectLine(row1, col1, row2, col2)) {
         return true;
     }
     
@@ -186,17 +205,12 @@ function canConnect(row1, col1, row2, col2) {
     return false;
 }
 
-// 直线连接检查
-function canConnectDirect(row1, col1, row2, col2) {
+// 直线连接检查（同一行或同一列，中间没有障碍物）
+function canConnectLine(row1, col1, row2, col2) {
     // 同一行
     if (row1 === row2) {
         const minCol = Math.min(col1, col2);
         const maxCol = Math.max(col1, col2);
-        
-        // 如果是相邻的单元格，直接返回true
-        if (maxCol - minCol === 1) {
-            return true;
-        }
         
         // 检查中间的单元格是否都为空
         for (let col = minCol + 1; col < maxCol; col++) {
@@ -211,11 +225,6 @@ function canConnectDirect(row1, col1, row2, col2) {
     if (col1 === col2) {
         const minRow = Math.min(row1, row2);
         const maxRow = Math.max(row1, row2);
-        
-        // 如果是相邻的单元格，直接返回true
-        if (maxRow - minRow === 1) {
-            return true;
-        }
         
         // 检查中间的单元格是否都为空
         for (let row = minRow + 1; row < maxRow; row++) {
@@ -232,17 +241,77 @@ function canConnectDirect(row1, col1, row2, col2) {
 // 一个拐角连接检查
 function canConnectOneCorner(row1, col1, row2, col2) {
     // 检查拐角点1：(row1, col2)
-    if (isEmpty(row1, col2)) {
+    // 这个点必须为空（或在边界外）
+    let corner1Valid = false;
+    if (row1 >= 0 && row1 < BOARD_SIZE && col2 >= 0 && col2 < BOARD_SIZE) {
+        // 如果拐角点在网格内，必须为空
+        corner1Valid = isEmpty(row1, col2);
+    } else {
+        // 如果拐角点在网格外，认为是有效的
+        corner1Valid = true;
+    }
+    
+    if (corner1Valid) {
         // 检查 (row1, col1) -> (row1, col2) -> (row2, col2)
-        if (canConnectDirect(row1, col1, row1, col2) && canConnectDirect(row1, col2, row2, col2)) {
+        // 第一段：(row1, col1) 到 (row1, col2)
+        let line1Valid = false;
+        if (row1 >= 0 && row1 < BOARD_SIZE && col2 >= 0 && col2 < BOARD_SIZE) {
+            // 如果拐角点在网格内，检查直线连接
+            line1Valid = canConnectLine(row1, col1, row1, col2);
+        } else {
+            // 如果拐角点在网格外，检查从 (row1, col1) 到边界是否畅通
+            line1Valid = canConnectToBorder(row1, col1, 'horizontal');
+        }
+        
+        // 第二段：(row1, col2) 到 (row2, col2)
+        let line2Valid = false;
+        if (row1 >= 0 && row1 < BOARD_SIZE && col2 >= 0 && col2 < BOARD_SIZE) {
+            // 如果拐角点在网格内，检查直线连接
+            line2Valid = canConnectLine(row1, col2, row2, col2);
+        } else {
+            // 如果拐角点在网格外，检查从边界到 (row2, col2) 是否畅通
+            line2Valid = canConnectToBorder(row2, col2, 'vertical');
+        }
+        
+        if (line1Valid && line2Valid) {
             return true;
         }
     }
     
     // 检查拐角点2：(row2, col1)
-    if (isEmpty(row2, col1)) {
+    // 这个点必须为空（或在边界外）
+    let corner2Valid = false;
+    if (row2 >= 0 && row2 < BOARD_SIZE && col1 >= 0 && col1 < BOARD_SIZE) {
+        // 如果拐角点在网格内，必须为空
+        corner2Valid = isEmpty(row2, col1);
+    } else {
+        // 如果拐角点在网格外，认为是有效的
+        corner2Valid = true;
+    }
+    
+    if (corner2Valid) {
         // 检查 (row1, col1) -> (row2, col1) -> (row2, col2)
-        if (canConnectDirect(row1, col1, row2, col1) && canConnectDirect(row2, col1, row2, col2)) {
+        // 第一段：(row1, col1) 到 (row2, col1)
+        let line1Valid = false;
+        if (row2 >= 0 && row2 < BOARD_SIZE && col1 >= 0 && col1 < BOARD_SIZE) {
+            // 如果拐角点在网格内，检查直线连接
+            line1Valid = canConnectLine(row1, col1, row2, col1);
+        } else {
+            // 如果拐角点在网格外，检查从 (row1, col1) 到边界是否畅通
+            line1Valid = canConnectToBorder(row1, col1, 'vertical');
+        }
+        
+        // 第二段：(row2, col1) 到 (row2, col2)
+        let line2Valid = false;
+        if (row2 >= 0 && row2 < BOARD_SIZE && col1 >= 0 && col1 < BOARD_SIZE) {
+            // 如果拐角点在网格内，检查直线连接
+            line2Valid = canConnectLine(row2, col1, row2, col2);
+        } else {
+            // 如果拐角点在网格外，检查从边界到 (row2, col2) 是否畅通
+            line2Valid = canConnectToBorder(row2, col2, 'horizontal');
+        }
+        
+        if (line1Valid && line2Valid) {
             return true;
         }
     }
@@ -252,88 +321,49 @@ function canConnectOneCorner(row1, col1, row2, col2) {
 
 // 两个拐角连接检查
 function canConnectTwoCorners(row1, col1, row2, col2) {
-    // 水平方向扫描（扫描每一列，检查是否可以通过该列的水平线连接）
-    for (let col = -1; col <= BOARD_SIZE; col++) {
-        // 检查两个拐点位置是否为空
-        const corner1Empty = isEmpty(row1, col);
-        const corner2Empty = isEmpty(row2, col);
+    // 水平方向扫描（扫描每一列）
+    for (let col = 0; col < BOARD_SIZE; col++) {
+        // 跳过起点和终点所在的列
+        if (col === col1 || col === col2) continue;
         
-        if (corner1Empty && corner2Empty) {
+        // 检查两个拐点位置是否为空
+        if (isEmpty(row1, col) && isEmpty(row2, col)) {
             // 检查路径：(row1, col1) -> (row1, col) -> (row2, col) -> (row2, col2)
-            
-            // 第一段：(row1, col1) 到 (row1, col)
-            let canConnect1 = false;
-            if (col < 0 || col >= BOARD_SIZE) {
-                // 如果col在边界外，检查从(row1, col1)到边界是否畅通
-                canConnect1 = canConnectToBorder(row1, col1, 'horizontal');
-            } else {
-                canConnect1 = canConnectDirect(row1, col1, row1, col);
-            }
-            
-            // 第二段：(row1, col) 到 (row2, col)
-            let canConnect2 = false;
-            if (col < 0 || col >= BOARD_SIZE) {
-                // 如果col在边界外，这条垂直线是畅通的（在网格外）
-                canConnect2 = true;
-            } else {
-                canConnect2 = canConnectDirect(row1, col, row2, col);
-            }
-            
-            // 第三段：(row2, col) 到 (row2, col2)
-            let canConnect3 = false;
-            if (col < 0 || col >= BOARD_SIZE) {
-                // 如果col在边界外，检查从边界到(row2, col2)是否畅通
-                canConnect3 = canConnectToBorder(row2, col2, 'horizontal');
-            } else {
-                canConnect3 = canConnectDirect(row2, col, row2, col2);
-            }
-            
-            if (canConnect1 && canConnect2 && canConnect3) {
+            if (canConnectLine(row1, col1, row1, col) && 
+                canConnectLine(row1, col, row2, col) && 
+                canConnectLine(row2, col, row2, col2)) {
                 return true;
             }
         }
     }
     
-    // 垂直方向扫描（扫描每一行，检查是否可以通过该行的垂直线连接）
-    for (let row = -1; row <= BOARD_SIZE; row++) {
-        // 检查两个拐点位置是否为空
-        const corner1Empty = isEmpty(row, col1);
-        const corner2Empty = isEmpty(row, col2);
+    // 垂直方向扫描（扫描每一行）
+    for (let row = 0; row < BOARD_SIZE; row++) {
+        // 跳过起点和终点所在的行
+        if (row === row1 || row === row2) continue;
         
-        if (corner1Empty && corner2Empty) {
+        // 检查两个拐点位置是否为空
+        if (isEmpty(row, col1) && isEmpty(row, col2)) {
             // 检查路径：(row1, col1) -> (row, col1) -> (row, col2) -> (row2, col2)
-            
-            // 第一段：(row1, col1) 到 (row, col1)
-            let canConnect1 = false;
-            if (row < 0 || row >= BOARD_SIZE) {
-                // 如果row在边界外，检查从(row1, col1)到边界是否畅通
-                canConnect1 = canConnectToBorder(row1, col1, 'vertical');
-            } else {
-                canConnect1 = canConnectDirect(row1, col1, row, col1);
-            }
-            
-            // 第二段：(row, col1) 到 (row, col2)
-            let canConnect2 = false;
-            if (row < 0 || row >= BOARD_SIZE) {
-                // 如果row在边界外，这条水平线是畅通的（在网格外）
-                canConnect2 = true;
-            } else {
-                canConnect2 = canConnectDirect(row, col1, row, col2);
-            }
-            
-            // 第三段：(row, col2) 到 (row2, col2)
-            let canConnect3 = false;
-            if (row < 0 || row >= BOARD_SIZE) {
-                // 如果row在边界外，检查从边界到(row2, col2)是否畅通
-                canConnect3 = canConnectToBorder(row2, col2, 'vertical');
-            } else {
-                canConnect3 = canConnectDirect(row, col2, row2, col2);
-            }
-            
-            if (canConnect1 && canConnect2 && canConnect3) {
+            if (canConnectLine(row1, col1, row, col1) && 
+                canConnectLine(row, col1, row, col2) && 
+                canConnectLine(row, col2, row2, col2)) {
                 return true;
             }
         }
+    }
+    
+    // 检查通过边界外的连接（两个拐点都在边界外）
+    // 检查是否可以通过左边界或右边界连接
+    if (canConnectToBorder(row1, col1, 'horizontal') && 
+        canConnectToBorder(row2, col2, 'horizontal')) {
+        return true;
+    }
+    
+    // 检查是否可以通过上边界或下边界连接
+    if (canConnectToBorder(row1, col1, 'vertical') && 
+        canConnectToBorder(row2, col2, 'vertical')) {
+        return true;
     }
     
     return false;
@@ -342,7 +372,7 @@ function canConnectTwoCorners(row1, col1, row2, col2) {
 // 检查单元格到边界是否畅通
 function canConnectToBorder(row, col, direction) {
     if (direction === 'horizontal') {
-        // 检查到左边界
+        // 检查到左边界是否畅通
         let leftClear = true;
         for (let c = col - 1; c >= 0; c--) {
             if (!isEmpty(row, c)) {
@@ -352,7 +382,7 @@ function canConnectToBorder(row, col, direction) {
         }
         if (leftClear) return true;
         
-        // 检查到右边界
+        // 检查到右边界是否畅通
         let rightClear = true;
         for (let c = col + 1; c < BOARD_SIZE; c++) {
             if (!isEmpty(row, c)) {
@@ -362,7 +392,7 @@ function canConnectToBorder(row, col, direction) {
         }
         return rightClear;
     } else {
-        // 检查到上边界
+        // 检查到上边界是否畅通
         let topClear = true;
         for (let r = row - 1; r >= 0; r--) {
             if (!isEmpty(r, col)) {
@@ -372,7 +402,7 @@ function canConnectToBorder(row, col, direction) {
         }
         if (topClear) return true;
         
-        // 检查到下边界
+        // 检查到下边界是否畅通
         let bottomClear = true;
         for (let r = row + 1; r < BOARD_SIZE; r++) {
             if (!isEmpty(r, col)) {
